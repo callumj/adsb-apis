@@ -15,6 +15,8 @@ type AircraftDetail struct {
 	DestinationMuni        string `json:"destination_muni"`
 	OriginAirportName      string `json:"origin_airport_name"`
 	OriginMuni             string `json:"origin_airport_muni"`
+	AircraftType           string `json:"aircraft_type"`
+	Airline                string `json:"airline"`
 }
 
 type NearbyResponse struct {
@@ -40,15 +42,22 @@ func (h *Handlers) GetNearby(c echo.Context) error {
 
 		f := &AircraftDetail{Flight: strings.TrimSpace(a.Flight)}
 		r.Flights = append(r.Flights, f)
-		d, err := adsbdb.Get(a.Flight)
+		d, err := adsbdb.GetCallsign(a.Flight)
 		if err != nil {
 			continue
 		}
 
+		f.Airline = d.Response.Flightroute.Airline.Name
 		f.DestinationAirportName = d.Response.Flightroute.Destination.Name
 		f.DestinationMuni = d.Response.Flightroute.Destination.Municipality
 		f.OriginAirportName = d.Response.Flightroute.Origin.Name
 		f.OriginMuni = d.Response.Flightroute.Origin.Municipality
+
+		r, err := adsbdb.GetRegistration(a.Hex)
+		if err != nil {
+			continue
+		}
+		f.AircraftType = r.Response.Aircraft.IcaoType
 	}
 
 	c.JSON(http.StatusOK, r)

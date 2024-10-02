@@ -11,6 +11,7 @@ type Aircraft struct {
 	Latitude  float64 `json:"lat"`
 	Longitude float64 `json:"lon"`
 	Flight    string  `json:"flight"`
+	Hex       string  `json:"hex"`
 }
 
 type Dump1090Response struct {
