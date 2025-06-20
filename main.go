@@ -34,6 +34,7 @@ func main() {
 
 	// Routes
 	e.GET("/nearby", h.GetNearby)
+	e.GET("/overhead", h.GetOverhead)
 
 	// Start server
 	e.Logger.Fatal(e.Start(conf.HttpListenAddr))
