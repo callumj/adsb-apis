@@ -4,6 +4,7 @@ go 1.22.2
 
 require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jftuga/geodist v1.0.0 // indirect
 	github.com/labstack/echo/v4 v4.12.0 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect

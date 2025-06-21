@@ -1,19 +1,17 @@
 package handlers
 
 import (
-	"github.com/callumj/adsb-apis/pkg/dump1090"
 	"github.com/labstack/echo/v4"
 )
 
 func (h *Handlers) GetNearby(c echo.Context) error {
-	i := dump1090.NewDump1090(h.Config.AircraftJsonUrl)
-	da, err := i.GetAircraft()
+	da, err := h.Dump1090.GetAircraft()
 	if err != nil {
 		c.Error(err)
 	}
 
 	o := da.GetNearby(h.Config.Latitude, h.Config.Longitude, h.Config.MaxDistance)
 
-	renderResults(o, c)
+	h.renderResults(o, c)
 	return nil
 }

@@ -12,6 +12,7 @@ type Aircraft struct {
 	Longitude float64 `json:"lon"`
 	Flight    string  `json:"flight"`
 	Hex       string  `json:"hex"`
+	DistMiles float64 `json:"dist_miles,omitempty"` // Distance from the observer, if calculated
 }
 
 type Dump1090Response struct {
@@ -28,6 +29,7 @@ func (d *Dump1090Response) GetNearby(lat, lon, dist float64) []*Aircraft {
 		miles, _ := geodist.HaversineDistance(loc, pos)
 
 		if miles < dist {
+			a.DistMiles = miles
 			list = append(list, a)
 		}
 	}
@@ -51,7 +53,7 @@ func (d *Dump1090) GetAircraft() (*Dump1090Response, error) {
 		return nil, err
 	}
 
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	dec := json.NewDecoder(res.Body)
 

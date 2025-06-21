@@ -4,7 +4,9 @@ import (
 	"errors"
 	"flag"
 
+	"github.com/callumj/adsb-apis/pkg/adsbdb"
 	"github.com/callumj/adsb-apis/pkg/config"
+	"github.com/callumj/adsb-apis/pkg/dump1090"
 	"github.com/callumj/adsb-apis/pkg/handlers"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -30,7 +32,9 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	h := &handlers.Handlers{Config: conf}
+	d := dump1090.NewDump1090(conf.AircraftJsonUrl)
+	a := adsbdb.NewAdsbdb()
+	h := &handlers.Handlers{Config: conf, Dump1090: d, AdsbDB: a}
 
 	// Routes
 	e.GET("/nearby", h.GetNearby)
