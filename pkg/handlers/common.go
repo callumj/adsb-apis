@@ -7,6 +7,8 @@ import (
 
 	"github.com/callumj/adsb-apis/pkg/dump1090"
 	"github.com/labstack/echo/v4"
+
+	"github.com/rs/zerolog/log"
 )
 
 type AircraftDetail struct {
@@ -36,6 +38,7 @@ func (h *Handlers) renderResults(o []*dump1090.Aircraft, c echo.Context) {
 
 		detail := h.aircraft2Detail(a)
 		if detail == nil {
+			log.Warn().Str("flight", a.Flight).Msg("Failed to get aircraft detail")
 			continue
 		}
 		r.Flights = append(r.Flights, detail)
@@ -48,6 +51,7 @@ func (h *Handlers) aircraft2Detail(a *dump1090.Aircraft) *AircraftDetail {
 	f := &AircraftDetail{Flight: strings.TrimSpace(a.Flight)}
 	d, err := h.AdsbDB.GetCallsign(a.Flight)
 	if err != nil {
+		log.Error().Err(err).Str("flight", a.Flight).Msg("Failed to get callsign details")
 		return nil
 	}
 
@@ -62,6 +66,7 @@ func (h *Handlers) aircraft2Detail(a *dump1090.Aircraft) *AircraftDetail {
 
 	reg, err := h.AdsbDB.GetRegistration(a.Hex)
 	if err != nil {
+		log.Error().Err(err).Str("hex", a.Hex).Msg("Failed to get registration details")
 		return nil
 	}
 	f.AircraftType = reg.Response.Aircraft.IcaoType
