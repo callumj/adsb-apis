@@ -17,9 +17,11 @@ func (h *Handlers) GetOverhead(c echo.Context) error {
 		c.Error(err)
 	}
 
-	o := da.GetNearby(h.Config.Latitude, h.Config.Longitude, 0.1)
+	o := da.GetNearby(h.Config.Latitude, h.Config.Longitude, 1)
 
-	resp := &OverheadResponse{}
+	resp := &OverheadResponse{
+		SimpleText: "None",
+	}
 
 	if len(o) != 0 && o[0].Flight != "" {
 		resp.Flight = h.aircraft2Detail(o[0])
