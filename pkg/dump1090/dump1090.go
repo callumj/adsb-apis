@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/jftuga/geodist"
+	"golang.org/x/exp/slices"
 )
 
 type Aircraft struct {
@@ -33,6 +34,15 @@ func (d *Dump1090Response) GetNearby(lat, lon, dist float64) []*Aircraft {
 			list = append(list, a)
 		}
 	}
+
+	slices.SortFunc(list, func(a, b *Aircraft) int {
+		if a.DistMiles < b.DistMiles {
+			return -1
+		} else if a.DistMiles > b.DistMiles {
+			return 1
+		}
+		return 0
+	})
 
 	return list
 }

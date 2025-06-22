@@ -13,6 +13,8 @@ type Config struct {
 	Latitude        float64 `yaml:"latitude"`
 	Longitude       float64 `yaml:"longitude"`
 	MaxDistance     float64 `yaml:"max_distance"`
+	PushIntervalSec int     `yaml:"push_interval_sec"`
+	PushWebhookUrl  string  `yaml:"push_webhook_url"`
 }
 
 func LoadConfig(path string) (*Config, error) {

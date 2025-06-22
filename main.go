@@ -8,6 +8,7 @@ import (
 	"github.com/callumj/adsb-apis/pkg/config"
 	"github.com/callumj/adsb-apis/pkg/dump1090"
 	"github.com/callumj/adsb-apis/pkg/handlers"
+	"github.com/callumj/adsb-apis/pkg/push"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
@@ -39,6 +40,13 @@ func main() {
 	// Routes
 	e.GET("/nearby", h.GetNearby)
 	e.GET("/overhead", h.GetOverhead)
+
+	// Push
+	if conf.PushWebhookUrl != "" {
+		p := push.NewPush(conf, d, a)
+		p.Start()
+		defer p.Stop()
+	}
 
 	// Start server
 	e.Logger.Fatal(e.Start(conf.HttpListenAddr))

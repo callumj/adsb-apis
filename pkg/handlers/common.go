@@ -12,15 +12,16 @@ import (
 )
 
 type AircraftDetail struct {
-	Flight                 string  `json:"flight"`
-	DestinationAirportName string  `json:"destination_airport_name"`
-	DestinationMuni        string  `json:"destination_muni"`
-	OriginAirportName      string  `json:"origin_airport_name"`
-	OriginMuni             string  `json:"origin_airport_muni"`
-	AircraftType           string  `json:"aircraft_type"`
-	Airline                string  `json:"airline"`
-	SimpleText             string  `json:"simple_text,omitempty"` // For simple text display
-	DistMiles              float64 `json:"dist_miles,omitempty"`  // Distance from the observer, if calculated
+	Flight                 string      `json:"flight"`
+	DestinationAirportName string      `json:"destination_airport_name"`
+	DestinationMuni        string      `json:"destination_muni"`
+	OriginAirportName      string      `json:"origin_airport_name"`
+	OriginMuni             string      `json:"origin_airport_muni"`
+	AircraftType           string      `json:"aircraft_type"`
+	Airline                string      `json:"airline"`
+	SimpleText             string      `json:"simple_text,omitempty"` // For simple text display
+	DistMiles              float64     `json:"dist_miles,omitempty"`  // Distance from the observer, if calculated
+	Raw                    interface{} `json:"raw,omitempty"`         // Raw response data
 }
 
 type NearbyResponse struct {
@@ -70,6 +71,8 @@ func (h *Handlers) aircraft2Detail(a *dump1090.Aircraft) *AircraftDetail {
 		return nil
 	}
 	f.AircraftType = reg.Response.Aircraft.IcaoType
+
+	f.Raw = d.Response
 
 	return f
 }
