@@ -24,8 +24,11 @@ func (h *Handlers) GetOverhead(c echo.Context) error {
 	}
 
 	if len(o) != 0 && o[0].Flight != "" {
-		resp.Flight = h.aircraft2Detail(o[0])
-		resp.SimpleText = resp.Flight.SimpleText
+		f := h.aircraft2Detail(o[0])
+		if f != nil {
+			resp.Flight = f
+			resp.SimpleText = resp.Flight.SimpleText
+		}
 	}
 
 	_ = c.JSON(http.StatusOK, resp)
