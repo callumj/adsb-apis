@@ -117,6 +117,11 @@ func Handler(cfg Config) echo.HandlerFunc {
 		minPoints := clampInt(parseInt(get("min-points", "2")), 1, 1000)
 		labelLast := parseBool(get("label-last", "true"))
 
+		oneBit := parseBool(get("onebit", "false"))
+		dither := parseBool(get("dither", "true"))
+		invertBW := parseBool(get("invert", "false"))
+		threshVal := clampInt(parseInt(get("threshold", "160")), 0, 255)
+
 		ctx := c.Request().Context()
 		httpClient := &http.Client{Timeout: httpTimeout}
 
@@ -295,8 +300,13 @@ func Handler(cfg Config) echo.HandlerFunc {
 		drawLabel(img, width-w-12, height-10, attr, color.RGBA{30, 30, 30, 255}, color.RGBA{255, 255, 255, 210})
 
 		// ---- 6) Write PNG to response ----
+		var outImg image.Image = img
+		if oneBit {
+			outImg = toOneBit(img, uint8(threshVal), dither, invertBW)
+		}
+
 		var buf bytes.Buffer
-		if err := png.Encode(&buf, img); err != nil {
+		if err := png.Encode(&buf, outImg); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "encode png failed")
 		}
 		c.Response().Header().Set(echo.HeaderContentType, "image/png")
