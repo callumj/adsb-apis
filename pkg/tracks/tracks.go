@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -165,6 +166,7 @@ func Handler(cfg Config) echo.HandlerFunc {
 		// ---- 2) Build trails chronologically ----
 		trails := map[string]*trail{}
 		baseTime := time.Now()
+		slices.Reverse(datasets)
 		for si, snap := range datasets { // already oldest..newest
 			snapTime := baseTime.Add(time.Duration(si-len(datasets)) * time.Second)
 			for _, a := range snap.Aircraft {
