@@ -49,6 +49,7 @@ func main() {
 		// Optional defaults (can be overridden per request by query params)
 		Dump1090Base: baseUrl,
 		TileCacheDir: "./tile_cache",
+		AdsbDB:       a,
 	}))
 
 	// Push

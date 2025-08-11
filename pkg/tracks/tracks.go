@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/callumj/adsb-apis/pkg/adsbdb"
 	"github.com/labstack/echo/v4"
 )
 
@@ -49,6 +50,7 @@ type Config struct {
 	HTTPTimeout  time.Duration
 	TileDelay    time.Duration
 	TileCacheDir string
+	AdsbDB       *adsbdb.Adsbdb
 }
 
 type aircraftJSON struct {
@@ -112,9 +114,8 @@ func Handler(cfg Config) echo.HandlerFunc {
 		width := clampInt(parseInt(get("width", "1600")), 256, 8000)
 		height := clampInt(parseInt(get("height", "1000")), 256, 8000)
 		historyN := clampInt(parseInt(get("history", "90")), 0, 119)
-		includeLatest := parseBool(get("include-latest", "true"))
-		minPoints := clampInt(parseInt(get("min-points", "2")), 1, 1000)
 		labelLast := parseBool(get("label-last", "true"))
+		showLegend := parseBool(get("show-legend", "true"))
 
 		theme := strings.ToLower(get("theme", "bw-dither"))
 		contrast := parseFloat(get("contrast", "1.35"))
@@ -137,15 +138,21 @@ func Handler(cfg Config) echo.HandlerFunc {
 
 		// ---- 1) Load snapshots ----
 		var datasets []*aircraftJSON
-		for i := historyN; i >= 0; i-- {
-			u := fmt.Sprintf("%s%s/history_%d.json", strings.TrimRight(dumpBase, "/"), dataPath, i)
-			aj, err := loadJSON(ctx, httpClient, u, userAgent)
-			if err == nil && aj != nil {
-				datasets = append(datasets, aj)
+
+		// load the latest aircraft.json first
+
+		u := fmt.Sprintf("%s%s/aircraft.json", strings.TrimRight(dumpBase, "/"), dataPath)
+		seenCraft := map[string]bool{}
+		aj, err := loadJSON(ctx, httpClient, u, userAgent)
+		if err == nil && aj != nil {
+			datasets = append(datasets, aj)
+			for _, a := range aj.Aircraft {
+				seenCraft[a.Hex] = true
 			}
 		}
-		if includeLatest {
-			u := fmt.Sprintf("%s%s/aircraft.json", strings.TrimRight(dumpBase, "/"), dataPath)
+
+		for i := historyN; i >= 0; i-- {
+			u := fmt.Sprintf("%s%s/history_%d.json", strings.TrimRight(dumpBase, "/"), dataPath, i)
 			aj, err := loadJSON(ctx, httpClient, u, userAgent)
 			if err == nil && aj != nil {
 				datasets = append(datasets, aj)
@@ -161,6 +168,11 @@ func Handler(cfg Config) echo.HandlerFunc {
 		for si, snap := range datasets { // already oldest..newest
 			snapTime := baseTime.Add(time.Duration(si-len(datasets)) * time.Second)
 			for _, a := range snap.Aircraft {
+				_, seen := seenCraft[a.Hex]
+				if !seen {
+					continue
+				}
+
 				if a.Lat == nil || a.Lon == nil {
 					continue
 				}
@@ -181,9 +193,7 @@ func Handler(cfg Config) echo.HandlerFunc {
 		}
 		var list []*trail
 		for _, tr := range trails {
-			if len(tr.points) >= minPoints {
-				list = append(list, tr)
-			}
+			list = append(list, tr)
 		}
 		if len(list) == 0 {
 			return echo.NewHTTPError(http.StatusUnprocessableEntity, "no drawable tracks; try increasing history or lowering min-points")
@@ -264,8 +274,10 @@ func Handler(cfg Config) echo.HandlerFunc {
 				lbl := strings.TrimSpace(tr.flight)
 				if lbl == "" {
 					lbl = tr.hex
-				} else {
-					lbl = fmt.Sprintf("%s (%s)", lbl, tr.hex)
+				}
+				csign, err := cfg.AdsbDB.GetCallsign(tr.flight)
+				if err == nil && csign != nil {
+					lbl = fmt.Sprintf("%s: %s -> %s", lbl, csign.Response.Flightroute.Origin.IataCode, csign.Response.Flightroute.Destination.IataCode)
 				}
 				drawLabel(img, px+6, py-6, lbl, color.RGBA{0, 0, 0, 255}, color.RGBA{255, 255, 255, 210})
 			}
@@ -276,36 +288,38 @@ func Handler(cfg Config) echo.HandlerFunc {
 			centerLat, centerLon, zoom, historyN)
 		drawLabel(img, 12, 20, title, color.RGBA{0, 0, 0, 255}, color.RGBA{255, 255, 255, 210})
 
-		latest := datasets[len(datasets)-1]
-		type legendRow struct {
-			key   string
-			color color.RGBA
-		}
-		var rows []legendRow
-		seen := map[string]bool{}
-		for _, a := range latest.Aircraft {
-			hex := strings.ToUpper(strings.TrimSpace(a.Hex))
-			if hex == "" || seen[hex] {
-				continue
+		if showLegend {
+			latest := datasets[len(datasets)-1]
+			type legendRow struct {
+				key   string
+				color color.RGBA
 			}
-			seen[hex] = true
-			lbl := strings.TrimSpace(a.Flight)
-			if lbl == "" {
-				lbl = hex
-			} else {
-				lbl = fmt.Sprintf("%s (%s)", lbl, hex)
+			var rows []legendRow
+			seen := map[string]bool{}
+			for _, a := range latest.Aircraft {
+				hex := strings.ToUpper(strings.TrimSpace(a.Hex))
+				if hex == "" || seen[hex] {
+					continue
+				}
+				seen[hex] = true
+				lbl := strings.TrimSpace(a.Flight)
+				if lbl == "" {
+					lbl = hex
+				} else {
+					lbl = fmt.Sprintf("%s (%s)", lbl, hex)
+				}
+				rows = append(rows, legendRow{key: lbl, color: colorForHex(hex)})
 			}
-			rows = append(rows, legendRow{key: lbl, color: colorForHex(hex)})
-		}
-		sort.Slice(rows, func(i, j int) bool { return rows[i].key < rows[j].key })
+			sort.Slice(rows, func(i, j int) bool { return rows[i].key < rows[j].key })
 
-		legendX, legendY := 12, 40
-		for _, r := range rows {
-			fillRect(img, legendX, legendY-10, 18, 6, r.color)
-			drawLabel(img, legendX+12, legendY, r.key, color.RGBA{0, 0, 0, 255}, color.RGBA{255, 255, 255, 200})
-			legendY += 16
-			if legendY > height-30 {
-				break
+			legendX, legendY := 12, 40
+			for _, r := range rows {
+				fillRect(img, legendX, legendY-10, 18, 6, r.color)
+				drawLabel(img, legendX+12, legendY, r.key, color.RGBA{0, 0, 0, 255}, color.RGBA{255, 255, 255, 200})
+				legendY += 16
+				if legendY > height-30 {
+					break
+				}
 			}
 		}
 

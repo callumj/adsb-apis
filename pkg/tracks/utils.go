@@ -19,8 +19,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/callumj/adsb-apis/pkg/fonts"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 )
 
@@ -167,10 +169,21 @@ func fillRect(img *image.RGBA, x, y, w, h int, c color.RGBA) {
 	draw.Draw(img, image.Rect(x, y, x+w, y+h), &image.Uniform{c}, image.Point{}, draw.Src)
 }
 func drawLabel(img *image.RGBA, x, y int, text string, fg, bg color.RGBA) {
+	fnt, _ := opentype.Parse(fonts.Roboto)
+
+	face, err := opentype.NewFace(fnt, &opentype.FaceOptions{
+		Size:    16,
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		face = basicfont.Face7x13
+	}
+
 	w := textWidth(text)
 	fillRect(img, x-3, y-12, w+6, 15, bg)
 	col := image.NewUniform(fg)
-	d := &font.Drawer{Dst: img, Src: col, Face: basicfont.Face7x13, Dot: fixed.P(x, y)}
+	d := &font.Drawer{Dst: img, Src: col, Face: face, Dot: fixed.P(x, y)}
 	d.DrawString(text)
 }
 func textWidth(s string) int { return len(s) * 7 }
@@ -182,103 +195,6 @@ func clamp(v, lo, hi float64) float64 {
 		return hi
 	}
 	return v
-}
-
-// toOneBit converts an RGBA image to a 1-bit, 2-color paletted image.
-// If dither is true, uses Floyd–Steinberg error diffusion; otherwise a hard threshold.
-// "invert" swaps black and white.
-func toOneBit(src *image.RGBA, threshold uint8, dither bool, invert bool) *image.Paletted {
-	bounds := src.Bounds()
-	var pal color.Palette
-	if invert {
-		pal = color.Palette{color.White, color.Black} // index 0=white, 1=black
-	} else {
-		pal = color.Palette{color.Black, color.White} // index 0=black, 1=white
-	}
-	dst := image.NewPaletted(bounds, pal)
-
-	w, h := bounds.Dx(), bounds.Dy()
-
-	// Error buffer for FS dithering (per pixel luminance error)
-	if dither {
-		errBuf := make([]float64, w*h)
-
-		at := func(x, y int) int { return y*w + x }
-
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
-				// Luminance (Rec. 601)
-				r, g, b, _ := src.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-				lum := 0.299*float64(r>>8) + 0.587*float64(g>>8) + 0.114*float64(b>>8)
-				lum += errBuf[at(x, y)] // add propagated error
-
-				var outIdx uint8
-				var quant float64
-				if invert {
-					// quantize to white(255) or black(0) but swapped mapping
-					if lum >= 128 {
-						outIdx = 0 // white index
-						quant = 255.0
-					} else {
-						outIdx = 1 // black index
-						quant = 0.0
-					}
-				} else {
-					if lum >= 128 {
-						outIdx = 1 // white index
-						quant = 255.0
-					} else {
-						outIdx = 0 // black index
-						quant = 0.0
-					}
-				}
-				// Write pixel
-				dst.SetColorIndex(bounds.Min.X+x, bounds.Min.Y+y, outIdx)
-
-				// Compute error and diffuse
-				err := lum - quant
-				// Distribute: 7/16 to (x+1, y), 3/16 to (x-1, y+1), 5/16 to (x, y+1), 1/16 to (x+1, y+1)
-				if x+1 < w {
-					errBuf[at(x+1, y)] += err * 7.0 / 16.0
-				}
-				if y+1 < h {
-					if x > 0 {
-						errBuf[at(x-1, y+1)] += err * 3.0 / 16.0
-					}
-					errBuf[at(x, y+1)] += err * 5.0 / 16.0
-					if x+1 < w {
-						errBuf[at(x+1, y+1)] += err * 1.0 / 16.0
-					}
-				}
-			}
-		}
-		return dst
-	}
-
-	// No dithering: hard threshold
-	thr := float64(threshold)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			r, g, b, _ := src.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-			lum := 0.299*float64(r>>8) + 0.587*float64(g>>8) + 0.114*float64(b>>8)
-			var idx uint8
-			if invert {
-				if lum >= thr {
-					idx = 0 // white
-				} else {
-					idx = 1 // black
-				}
-			} else {
-				if lum >= thr {
-					idx = 1 // white
-				} else {
-					idx = 0 // black
-				}
-			}
-			dst.SetColorIndex(bounds.Min.X+x, bounds.Min.Y+y, idx)
-		}
-	}
-	return dst
 }
 
 func strokeLine(img *image.RGBA, x0, y0, x1, y1, w int, c color.RGBA) {
