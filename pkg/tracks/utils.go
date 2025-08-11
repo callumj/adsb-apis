@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"golang.org/x/image/font"
@@ -275,6 +276,175 @@ func toOneBit(src *image.RGBA, threshold uint8, dither bool, invert bool) *image
 				}
 			}
 			dst.SetColorIndex(bounds.Min.X+x, bounds.Min.Y+y, idx)
+		}
+	}
+	return dst
+}
+
+func strokeLine(img *image.RGBA, x0, y0, x1, y1, w int, c color.RGBA) {
+	if w <= 1 {
+		line(img, x0, y0, x1, y1, c)
+		return
+	}
+	dx := x1 - x0
+	dy := y1 - y0
+	steps := int(math.Hypot(float64(dx), float64(dy)))
+	if steps < 1 {
+		steps = 1
+	}
+	r := w / 2
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		x := int(math.Round(float64(x0) + t*float64(dx)))
+		y := int(math.Round(float64(y0) + t*float64(dy)))
+		fillCircle(img, x, y, r, c)
+	}
+}
+
+func toGray(src image.Image) *image.Gray {
+	b := src.Bounds()
+	dst := image.NewGray(b)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r, g, b, _ := src.At(x, y).RGBA()
+			// luminance (sRGB): 0.2126 R + 0.7152 G + 0.0722 B
+			yv := 0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)
+			dst.SetGray(x, y, color.Gray{Y: uint8((yv/65535.0)*255.0 + 0.5)})
+		}
+	}
+	return dst
+}
+
+func adjustGray(g *image.Gray, contrast, gamma float64, invert bool) *image.Gray {
+	b := g.Bounds()
+	dst := image.NewGray(b)
+	invGamma := 1.0
+	if gamma > 0 && gamma != 1.0 {
+		invGamma = 1.0 / gamma
+	}
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		i := g.PixOffset(b.Min.X, y)
+		for x := b.Min.X; x < b.Max.X; x++ {
+			v := float64(g.Pix[i]) / 255.0
+			// gamma
+			if gamma != 1.0 {
+				v = math.Pow(v, invGamma)
+			}
+			// contrast around mid-gray
+			v = (v-0.5)*contrast + 0.5
+			if invert {
+				v = 1.0 - v
+			}
+			if v < 0 {
+				v = 0
+			} else if v > 1 {
+				v = 1
+			}
+			dst.Pix[i] = uint8(v*255.0 + 0.5)
+			i++
+		}
+	}
+	return dst
+}
+
+func thresholdBW(g *image.Gray, thresh uint8) *image.Paletted {
+	b := g.Bounds()
+	pal := color.Palette{color.Black, color.White}
+	dst := image.NewPaletted(b, pal)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		i := g.PixOffset(b.Min.X, y)
+		j := dst.PixOffset(b.Min.X, y)
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if g.Pix[i] >= thresh {
+				dst.Pix[j] = 1 // white
+			} else {
+				dst.Pix[j] = 0 // black
+			}
+			i++
+			j++
+		}
+	}
+	return dst
+}
+
+func floydSteinbergBW(g *image.Gray) *image.Paletted {
+	b := g.Bounds()
+	w, h := b.Dx(), b.Dy()
+	buf := make([]float64, w*h)
+	// seed with grayscale values 0..255
+	for y := 0; y < h; y++ {
+		copy(buf[y*w:(y+1)*w], bytesToFloats(g.Pix[g.PixOffset(b.Min.X, b.Min.Y+y):g.PixOffset(b.Min.X, b.Min.Y+y)+w]))
+	}
+	pal := color.Palette{color.Black, color.White}
+	dst := image.NewPaletted(b, pal)
+
+	at := func(x, y int) *float64 { return &buf[y*w+x] }
+
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			old := *at(x, y)
+			newv := 0.0
+			idx := uint8(0)
+			if old >= 128.0 {
+				newv = 255.0
+				idx = 1
+			}
+			dst.Pix[dst.PixOffset(b.Min.X+x, b.Min.Y+y)] = idx
+			err := old - newv
+			if x+1 < w {
+				*at(x+1, y) += err * 7 / 16
+			}
+			if y+1 < h {
+				if x > 0 {
+					*at(x-1, y+1) += err * 3 / 16
+				}
+				*at(x, y+1) += err * 5 / 16
+				if x+1 < w {
+					*at(x+1, y+1) += err * 1 / 16
+				}
+			}
+		}
+	}
+	return dst
+}
+
+func bytesToFloats(p []uint8) []float64 {
+	f := make([]float64, len(p))
+	for i := range p {
+		f[i] = float64(p[i])
+	}
+	return f
+}
+
+func quantizeGrayLevels(g *image.Gray, levels []uint8) *image.Paletted {
+	sort.Slice(levels, func(i, j int) bool { return levels[i] < levels[j] })
+	pal := make(color.Palette, len(levels))
+	for i, v := range levels {
+		pal[i] = color.Gray{Y: v}
+	}
+	b := g.Bounds()
+	dst := image.NewPaletted(b, pal)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		i := g.PixOffset(b.Min.X, y)
+		j := dst.PixOffset(b.Min.X, y)
+		for x := b.Min.X; x < b.Max.X; x++ {
+			v := g.Pix[i]
+			// nearest level
+			best := 0
+			bestd := 999
+			for li, lv := range levels {
+				d := int(v) - int(lv)
+				if d < 0 {
+					d = -d
+				}
+				if d < bestd {
+					bestd = d
+					best = li
+				}
+			}
+			dst.Pix[j] = uint8(best)
+			i++
+			j++
 		}
 	}
 	return dst

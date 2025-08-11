@@ -116,10 +116,21 @@ func Handler(cfg Config) echo.HandlerFunc {
 		minPoints := clampInt(parseInt(get("min-points", "2")), 1, 1000)
 		labelLast := parseBool(get("label-last", "true"))
 
-		oneBit := parseBool(get("onebit", "false"))
-		dither := parseBool(get("dither", "true"))
-		invertBW := parseBool(get("invert", "false"))
-		threshVal := clampInt(parseInt(get("threshold", "160")), 0, 255)
+		theme := strings.ToLower(get("theme", "bw-dither"))
+		contrast := parseFloat(get("contrast", "1.35"))
+		if contrast <= 0 {
+			contrast = 1.0
+		}
+		gamma := parseFloat(get("gamma", "1.0"))
+		invert := parseBool(get("invert", "false"))
+		lineWidth := clampInt(parseInt(get("line-width", "0")), 1, 15)
+		if lineWidth == 0 {
+			if theme == "color" {
+				lineWidth = 1
+			} else {
+				lineWidth = 3
+			}
+		}
 
 		ctx := c.Request().Context()
 		httpClient := &http.Client{Timeout: httpTimeout}
@@ -233,11 +244,15 @@ func Handler(cfg Config) echo.HandlerFunc {
 
 		for _, tr := range list {
 			cclr := colorForHex(tr.hex)
+			trackColor := colorForHex(tr.hex)
+			if theme != "color" { // e-ink: solid black tracks
+				trackColor = color.RGBA{0, 0, 0, 255}
+			}
 			for i := 1; i < len(tr.points); i++ {
 				x0, y0, ok0 := project(tr.points[i-1].lat, tr.points[i-1].lon)
 				x1, y1, ok1 := project(tr.points[i].lat, tr.points[i].lon)
 				if ok0 || ok1 {
-					line(img, x0, y0, x1, y1, cclr)
+					strokeLine(img, x0, y0, x1, y1, lineWidth, trackColor)
 				}
 			}
 			// last point
@@ -300,10 +315,31 @@ func Handler(cfg Config) echo.HandlerFunc {
 
 		// ---- 6) Write PNG to response ----
 		var outImg image.Image = img
-		if oneBit {
-			outImg = toOneBit(img, uint8(threshVal), dither, invertBW)
+		switch theme {
+		case "color":
+			// no post-processing
+		case "gray":
+			outImg = toGray(img)
+			outImg = adjustGray(outImg.(*image.Gray), contrast, gamma, invert)
+		case "gray4":
+			g := toGray(img)
+			g = adjustGray(g, contrast, gamma, invert)
+			outImg = quantizeGrayLevels(g, []uint8{0, 85, 170, 255}) // 4-level
+		case "bw":
+			g := toGray(img)
+			g = adjustGray(g, contrast, gamma, invert)
+			outImg = thresholdBW(g, 128) // hard threshold
+		case "bw-dither":
+			g := toGray(img)
+			g = adjustGray(g, contrast, gamma, invert)
+			outImg = floydSteinbergBW(g) // error-diffused 1-bit
+		default:
+			g := toGray(img)
+			g = adjustGray(g, contrast, gamma, invert)
+			outImg = floydSteinbergBW(g)
 		}
 
+		// Encode outImg instead of img:
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, outImg); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "encode png failed")
