@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
-	"io"
 	"math"
 	"net/http"
 	"os"
@@ -309,10 +308,10 @@ func Handler(cfg Config) echo.HandlerFunc {
 		if err := png.Encode(&buf, outImg); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "encode png failed")
 		}
-		c.Response().Header().Set(echo.HeaderContentType, "image/png")
 		c.Response().Header().Set("Cache-Control", "no-cache")
-		_, _ = io.Copy(c.Response(), &buf)
-		return nil
+		len := buf.Len()
+		c.Response().Header().Set("Content-Length", strconv.Itoa(len))
+		return c.Blob(http.StatusOK, "image/png", buf.Bytes())
 	}
 }
 
