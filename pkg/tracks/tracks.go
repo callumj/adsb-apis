@@ -277,7 +277,7 @@ func Handler(cfg Config) echo.HandlerFunc {
 				if lbl == "" {
 					lbl = tr.hex
 				}
-				csign, err := cfg.AdsbDB.GetCallsign(tr.flight)
+				csign, err := cfg.AdsbDB.GetEnRouteFlight(tr.flight)
 				if err == nil && csign != nil {
 					lbl = fmt.Sprintf("%s: %s -> %s", lbl, csign.Response.Flightroute.Origin.IataCode, csign.Response.Flightroute.Destination.IataCode)
 				}

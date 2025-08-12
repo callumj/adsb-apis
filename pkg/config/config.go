@@ -8,13 +8,14 @@ import (
 )
 
 type Config struct {
-	HttpListenAddr  string  `yaml:"http_listen_addr"`
-	AircraftJsonUrl string  `yaml:"aircraft_json_url"`
-	Latitude        float64 `yaml:"latitude"`
-	Longitude       float64 `yaml:"longitude"`
-	MaxDistance     float64 `yaml:"max_distance"`
-	PushIntervalSec int     `yaml:"push_interval_sec"`
-	PushWebhookUrl  string  `yaml:"push_webhook_url"`
+	HttpListenAddr    string  `yaml:"http_listen_addr"`
+	AircraftJsonUrl   string  `yaml:"aircraft_json_url"`
+	Latitude          float64 `yaml:"latitude"`
+	Longitude         float64 `yaml:"longitude"`
+	MaxDistance       float64 `yaml:"max_distance"`
+	PushIntervalSec   int     `yaml:"push_interval_sec"`
+	PushWebhookUrl    string  `yaml:"push_webhook_url"`
+	FlightAwareApiKey string  `yaml:"flightaware_api_key"`
 }
 
 func LoadConfig(path string) (*Config, error) {

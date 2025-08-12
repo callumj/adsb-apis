@@ -36,7 +36,7 @@ func main() {
 	e.Use(middleware.Recover())
 
 	d := dump1090.NewDump1090(conf.AircraftJsonUrl)
-	a := adsbdb.NewAdsbdb()
+	a := adsbdb.NewAdsbdb("./cache", conf.FlightAwareApiKey)
 	h := &handlers.Handlers{Config: conf, Dump1090: d, AdsbDB: a}
 
 	// Routes
