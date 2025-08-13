@@ -50,9 +50,9 @@ func (h *Handlers) renderResults(o []*dump1090.Aircraft, c echo.Context) {
 
 func (h *Handlers) aircraft2Detail(a *dump1090.Aircraft) *AircraftDetail {
 	f := &AircraftDetail{Flight: strings.TrimSpace(a.Flight)}
-	d, err := h.AdsbDB.GetCallsign(a.Flight)
+	d, err := h.AdsbDB.GetEnRouteFlight(a.Flight)
 	if err != nil {
-		log.Error().Err(err).Str("flight", a.Flight).Msg("Failed to get callsign details")
+		log.Error().Err(err).Str("flight", a.Flight).Msg("Failed to get en route flight details")
 		return nil
 	}
 
