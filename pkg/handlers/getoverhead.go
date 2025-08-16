@@ -24,7 +24,7 @@ func (h *Handlers) GetOverhead(c echo.Context) error {
 	}
 
 	if len(o) != 0 && o[0].Flight != "" {
-		f := h.aircraft2Detail(o[0])
+		f := h.aircraft2Detail(o[0], true)
 		if f != nil {
 			resp.Flight = f
 			resp.SimpleText = resp.Flight.SimpleText

@@ -12,6 +12,6 @@ func (h *Handlers) GetNearby(c echo.Context) error {
 
 	o := da.GetNearby(h.Config.Latitude, h.Config.Longitude, h.Config.MaxDistance)
 
-	h.renderResults(o, c)
+	h.renderResults(o, false, c)
 	return nil
 }
